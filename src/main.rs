@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Error, io::Write};
+use std::{error::Error, io::Write};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -105,6 +105,7 @@ impl BRANCH_INSTRUCTIONS {
 
 pub const MEMORY_SIZE: u32 = 65536;
 
+#[derive(Clone)]
 pub struct Instruction {
     pub opcode: u8,
     pub dest: u8,
@@ -164,8 +165,8 @@ pub fn interpret(bytecode: Vec<u8>) {
     let mut state = State::default();
 
     while state.program_counter < program.len() {
-        let ix = program[state.program_counter];
-        let execution_result: Result<(), _> = Ok(());
+        let ix = program[state.program_counter].clone();
+        let execution_result: Result<(), _> = state.execution_ix(ix);
         if let Err(e) = execution_result {
             println!("Error execution instruction: {:?}", e);
             break;
