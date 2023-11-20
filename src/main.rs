@@ -105,7 +105,7 @@ impl BRANCH_INSTRUCTIONS {
 
 pub const MEMORY_SIZE: u32 = 65536;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Instruction {
     pub opcode: u8,
     pub dest: u8,
@@ -204,20 +204,38 @@ impl State {
     }
     pub fn execution_ix(&mut self, ix: Instruction) -> StateResult<()> {
         match ix.opcode {
-            MEMORY_INSTRUCTIONS::MEM_STXW => self.store_word(
-                self.registers[ix.dest as usize] + i64::from(ix.offset),
-                self.registers[ix.src as usize] as i32,
-            ),
-            _ => {
-                panic!("opcode not yet supported")
+            OPCODES::ALU64_MOV_IMM => {
+                self.registers[ix.dest as usize] += ix.imm as i64;
             }
+            OPCODES::ALU64_ADD_REG => {
+                self.registers[ix.dest as usize] += self.registers[ix.src as usize];
+            }
+            OPCODES::ALU64_MOV_REG => {
+                self.registers[ix.dest as usize] = self.registers[ix.src as usize];
+            }
+            OPCODES::ALU64_SUB_IMM => {
+                self.registers[ix.dest as usize] -= ix.imm as i64;
+            }
+            MEMORY_INSTRUCTIONS::MEM_STXW => {
+                self.store_word(
+                    self.registers[ix.dest as usize] + i64::from(ix.offset),
+                    self.registers[ix.src as usize] as i32,
+                )?;
+            }
+            BRANCH_INSTRUCTIONS::BRANCH_EXIT => return Err("0".into()),
+            _ => return Err("opcode not yet supported".into()),
         }
+
+        Ok(())
     }
 }
 
 pub fn interpret(bytecode: Vec<u8>) {
     let mut program: Vec<Instruction> = Vec::with_capacity(bytecode.len() / 8);
-
+    let def_ix = Instruction::default();
+    for i in vec![def_ix; bytecode.len() / 8] {
+        program.push(i);
+    }
     for i in (0..bytecode.len()).step_by(8) {
         let ix = Instruction {
             opcode: bytecode[i],
@@ -239,7 +257,7 @@ pub fn interpret(bytecode: Vec<u8>) {
         let ix = program[state.program_counter].clone();
         let execution_result: Result<(), _> = state.execution_ix(ix);
         if let Err(e) = execution_result {
-            println!("Error execution instruction: {:?}", e);
+            println!("Program exited: {:?}", e);
             break;
         }
         state.program_counter += 1;
@@ -251,11 +269,56 @@ pub fn interpret(bytecode: Vec<u8>) {
 }
 
 fn main() {
-    let a = 7;
-    match a {
-        OPCODES::ALU64_ADD_IMM => println!("{}", 0x07),
-        _ => {
-            panic!("invalid opcode")
-        }
-    }
+    let bytecode = vec![
+        // opcode      [dst+src]  [offset]	[imm]
+        OPCODES::ALU64_MOV_IMM,
+        0x01,
+        0x00,
+        0x00,
+        0x05,
+        0x00,
+        0x00,
+        0x00, // r1 = 5
+        OPCODES::ALU64_MOV_IMM,
+        0x02,
+        0x00,
+        0x00,
+        0x09,
+        0x00,
+        0x00,
+        0x00, // r2 = 9
+        OPCODES::ALU64_ADD_REG,
+        0x21,
+        0x02,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00, // r1 = r1 + r2
+        OPCODES::ALU64_MOV_REG,
+        0x10,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00, // r0 = r1
+        OPCODES::ALU64_SUB_IMM,
+        0x00,
+        0x00,
+        0x00,
+        0x03,
+        0x00,
+        0x00,
+        0x00, // r0 = r0 - 3
+        BRANCH_INSTRUCTIONS::BRANCH_EXIT,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00, // exit
+    ];
+    interpret(bytecode);
 }
