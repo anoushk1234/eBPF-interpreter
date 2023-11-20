@@ -1,3 +1,7 @@
+use std::{error::Error, fmt::Error, io::Write};
+
+use byteorder::{LittleEndian, WriteBytesExt};
+
 #[non_exhaustive]
 pub struct OPCODES;
 
@@ -105,20 +109,77 @@ pub struct Instruction {
     pub opcode: u8,
     pub dest: u8,
     pub src: u8,
-    pub offset: u16,
-    pub imm: u32,
+    pub offset: i16,
+    pub imm: i32,
 }
 
 // pub type MemByte<'a> = &'a [u8];
 
+#[derive(Default)]
 pub struct State {
-    pub program_counter: isize,
+    pub program_counter: usize,
     pub registers: [i64; 11],
-    pub memory: Vec<Vec<u8>>,
+    pub memory: Vec<u8>,
+}
+impl State {
+    pub fn storeWord(&mut self, address: i64, value: i32) -> Result<(), Box<dyn Error>> {
+        if address < 0 || address + 4 > i64::from(self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+        self.memory[(address as usize)..(address as usize + 4)]
+            .copy_from_slice(&value.to_le_bytes());
+        Ok(())
+    }
+    pub fn execution_ix(&mut self, ix: Instruction) -> Result<(), Box<dyn Error>> {
+        match ix.opcode {
+            MEMORY_INSTRUCTIONS::MEM_STXW => self.storeWord(
+                self.registers[ix.dest as usize] + i64::from(ix.offset),
+                self.registers[ix.src as usize] as i32,
+            ),
+            _ => {
+                panic!("opcode not yet supported")
+            }
+        }
+    }
+}
+
+pub fn interpret(bytecode: Vec<u8>) {
+    let mut program: Vec<Instruction> = Vec::with_capacity(bytecode.len() / 8);
+
+    for i in (0..bytecode.len()).step_by(8) {
+        let ix = Instruction {
+            opcode: bytecode[i],
+            dest: bytecode[i + 1] & 0x0F,
+            src: (bytecode[i + 1] >> 4) & 0x0F,
+            offset: i16::from(bytecode[i + 2]) | i16::from(bytecode[i + 3]) << 8,
+            imm: i32::from(bytecode[i + 4])
+                | i32::from(bytecode[i + 5]) << 8
+                | i32::from(bytecode[i + 6]) << 16
+                | i32::from(bytecode[i + 7]) << 24,
+        };
+
+        program[i / 8] = ix;
+    }
+
+    let mut state = State::default();
+
+    while state.program_counter < program.len() {
+        let ix = program[state.program_counter];
+        let execution_result: Result<(), _> = Ok(());
+        if let Err(e) = execution_result {
+            println!("Error execution instruction: {:?}", e);
+            break;
+        }
+        state.program_counter += 1;
+    }
+
+    for (i, register) in state.registers.iter().enumerate() {
+        println!("R{}: {}", i, register);
+    }
 }
 
 fn main() {
-    let a = 8;
+    let a = 7;
     match a {
         OPCODES::ALU64_ADD_IMM => println!("{}", 0x07),
         _ => {
