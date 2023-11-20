@@ -122,18 +122,89 @@ pub struct State {
     pub registers: [i64; 11],
     pub memory: Vec<u8>,
 }
+pub type StateResult<T> = Result<T, Box<dyn Error>>;
 impl State {
-    pub fn storeWord(&mut self, address: i64, value: i32) -> Result<(), Box<dyn Error>> {
-        if address < 0 || address + 4 > i64::from(self.memory.len() as i64) {
+    pub fn store_word(&mut self, address: i64, value: i32) -> StateResult<()> {
+        if address < 0 || address + 4 > (self.memory.len() as i64) {
             return Err("mem access out of bounds".into());
         }
         self.memory[(address as usize)..(address as usize + 4)]
-            .copy_from_slice(&value.to_le_bytes());
+            .copy_from_slice(&(value as u32).to_le_bytes());
         Ok(())
     }
-    pub fn execution_ix(&mut self, ix: Instruction) -> Result<(), Box<dyn Error>> {
+    pub fn store_half_word(&mut self, address: i64, value: i16) -> StateResult<()> {
+        if address < 0 || address + 2 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+        self.memory[(address as usize)..(address as usize + 2)]
+            .copy_from_slice(&(value as u16).to_le_bytes());
+        Ok(())
+    }
+    pub fn store_byte(&mut self, address: i64, value: i8) -> StateResult<()> {
+        if address < 0 || address + 1 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+        self.memory[address as usize] = value as u8;
+        Ok(())
+    }
+
+    pub fn store_double_word(&mut self, address: i64, value: i64) -> StateResult<()> {
+        if address < 0 || address + 8 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+        self.memory[(address as usize)..(address as usize + 8)]
+            .copy_from_slice(&(value as u64).to_le_bytes());
+        Ok(())
+    }
+
+    pub fn load_word(&mut self, address: i64) -> StateResult<i64> {
+        if address < 0 || address + 4 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+
+        let wrd = u32::from_le_bytes(
+            self.memory[(address as usize)..(address as usize) + 4]
+                .try_into()
+                .unwrap(),
+        );
+        Ok(wrd as i64)
+    }
+    pub fn load_half_word(&mut self, address: i64) -> StateResult<i64> {
+        if address < 0 || address + 2 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+
+        let wrd = u16::from_le_bytes(
+            self.memory[(address as usize)..(address as usize) + 2]
+                .try_into()
+                .unwrap(),
+        ) as i16;
+        Ok(wrd as i64)
+    }
+
+    pub fn load_byte(&mut self, address: i64) -> StateResult<i64> {
+        if address < 0 || address + 1 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+        let byt = self.memory[address as usize] as i64;
+        Ok(byt)
+    }
+
+    pub fn load_double_word(&mut self, address: i64) -> StateResult<i64> {
+        if address < 0 || address + 8 > (self.memory.len() as i64) {
+            return Err("mem access out of bounds".into());
+        }
+
+        let wrd = u64::from_le_bytes(
+            self.memory[(address as usize)..(address as usize) + 8]
+                .try_into()
+                .unwrap(),
+        );
+        Ok(wrd as i64)
+    }
+    pub fn execution_ix(&mut self, ix: Instruction) -> StateResult<()> {
         match ix.opcode {
-            MEMORY_INSTRUCTIONS::MEM_STXW => self.storeWord(
+            MEMORY_INSTRUCTIONS::MEM_STXW => self.store_word(
                 self.registers[ix.dest as usize] + i64::from(ix.offset),
                 self.registers[ix.src as usize] as i32,
             ),
